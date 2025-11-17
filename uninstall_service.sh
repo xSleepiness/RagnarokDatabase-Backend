@@ -39,15 +39,6 @@ print_header() {
     echo -e "${BLUE}============================================================${NC}\n"
 }
 
-# Check if script is run as root
-check_root() {
-    if [ "$EUID" -eq 0 ]; then
-        print_warning "This script should NOT be run as root"
-        print_warning "Please run as a regular user with sudo privileges"
-        exit 1
-    fi
-}
-
 # Stop the service
 stop_service() {
     print_header "Stopping Service"
@@ -204,8 +195,6 @@ print_final_info() {
 # Main uninstallation flow
 main() {
     print_header "Ragnarok Database Backend - Service Uninstaller"
-    
-    check_root
     
     # Show what will be done
     echo -e "${YELLOW}This script will:${NC}"

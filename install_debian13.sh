@@ -39,15 +39,6 @@ print_header() {
     echo -e "${BLUE}============================================================${NC}\n"
 }
 
-# Check if script is run as root
-check_root() {
-    if [ "$EUID" -eq 0 ]; then
-        print_warning "This script should NOT be run as root"
-        print_warning "Please run as a regular user with sudo privileges"
-        exit 1
-    fi
-}
-
 # Check if running on Debian
 check_debian() {
     if [ ! -f /etc/debian_version ]; then
@@ -414,7 +405,6 @@ print_final_instructions() {
 main() {
     print_header "Ragnarok Database Backend - Debian 13 Installer"
     
-    check_root
     check_debian
     
     # Ask for confirmation
