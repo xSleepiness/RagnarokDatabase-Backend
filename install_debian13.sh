@@ -102,44 +102,36 @@ install_optional_deps() {
 
 # Setup application directory
 setup_app_directory() {
-    print_header "Setting Up Application Directory"
+    print_header "Verifying Application Directory"
     
-    APP_DIR="$HOME/ragnarok-db-backend"
-    REPO_URL="https://github.com/xSleepiness/RagnarokDatabase-Backend.git"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
-    if [ -d "$APP_DIR" ]; then
-        print_warning "Directory $APP_DIR already exists"
-        
-        # Check if it's a git repository
-        if [ -d "$APP_DIR/.git" ]; then
-            print_info "Updating existing repository..."
-            cd "$APP_DIR"
-            git pull
-            print_success "Repository updated"
-            return
-        else
-            read -p "Directory exists but is not a git repo. Remove it? (y/N): " -r
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                rm -rf "$APP_DIR"
-                print_info "Removed existing directory"
-            else
-                print_error "Cannot proceed with existing non-git directory"
-                exit 1
-            fi
-        fi
+    # Check if we're in a git repository
+    if [ ! -d "$SCRIPT_DIR/.git" ]; then
+        print_error "This script must be run from a git repository"
+        print_error "Please clone the repository first:"
+        print_error "  git clone https://github.com/xSleepiness/RagnarokDatabase-Backend.git"
+        print_error "  cd RagnarokDatabase-Backend"
+        print_error "  ./install_debian13.sh"
+        exit 1
     fi
     
-    print_info "Cloning repository from GitHub..."
-    git clone "$REPO_URL" "$APP_DIR"
-    cd "$APP_DIR"
-    print_success "Repository cloned to $APP_DIR"
+    print_info "Working directory: $SCRIPT_DIR"
+    
+    # Update repository to latest version
+    print_info "Updating repository to latest version..."
+    git pull
+    
+    print_success "Repository is up to date"
+    cd "$SCRIPT_DIR"
 }
 
 # Create Python virtual environment
 create_virtualenv() {
     print_header "Creating Python Virtual Environment"
     
-    cd "$HOME/ragnarok-db-backend"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    cd "$SCRIPT_DIR"
     
     if [ -d "venv" ]; then
         print_warning "Virtual environment already exists"
@@ -156,7 +148,8 @@ create_virtualenv() {
 install_python_deps() {
     print_header "Installing Python Dependencies"
     
-    cd "$HOME/ragnarok-db-backend"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    cd "$SCRIPT_DIR"
     
     if [ ! -f "requirements.txt" ]; then
         print_error "requirements.txt not found"
@@ -181,14 +174,17 @@ install_python_deps() {
 create_prestart_script() {
     print_header "Creating Pre-Start Script"
     
-    APP_DIR="$HOME/ragnarok-db-backend"
-    PRESTART_SCRIPT="$APP_DIR/prestart.sh"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PRESTART_SCRIPT="$SCRIPT_DIR/prestart.sh"
     
     cat > "$PRESTART_SCRIPT" <<'EOF'
 #!/bin/bash
 # Pre-start script: Update code and dependencies before starting service
 
 set -e
+
+# Add common binary paths
+export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -197,11 +193,11 @@ echo "[$(date)] Starting pre-start tasks..."
 
 # Git pull to get latest changes
 echo "[$(date)] Pulling latest changes from GitHub..."
-git pull
+/usr/bin/git pull
 
 # Check if requirements.txt changed
 REQUIREMENTS_CHANGED=false
-if git diff --name-only HEAD@{1} HEAD | grep -q "requirements.txt"; then
+if /usr/bin/git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -q "requirements.txt"; then
     REQUIREMENTS_CHANGED=true
     echo "[$(date)] requirements.txt changed, will update dependencies"
 fi
@@ -230,7 +226,8 @@ create_systemd_service() {
     print_header "Creating Systemd Service"
     
     SERVICE_FILE="/etc/systemd/system/ragnarok-db-api.service"
-    APP_DIR="$HOME/ragnarok-db-backend"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    APP_DIR="$SCRIPT_DIR"
     USER=$(whoami)
     
     print_info "Creating service file: $SERVICE_FILE"
@@ -244,8 +241,8 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=$APP_DIR
-Environment="PATH=$APP_DIR/venv/bin"
-ExecStartPre=$APP_DIR/prestart.sh
+Environment="PATH=$APP_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStartPre=/bin/bash $APP_DIR/prestart.sh
 ExecStart=$APP_DIR/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
@@ -271,6 +268,8 @@ configure_nginx() {
         return
     fi
     
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
     read -p "Enter your domain name (or press Enter for localhost): " DOMAIN
     if [ -z "$DOMAIN" ]; then
         DOMAIN="localhost"
@@ -292,7 +291,7 @@ server {
     }
 
     location /static {
-        alias $HOME/ragnarok-db-backend/data/images;
+        alias $SCRIPT_DIR/data/images;
     }
 }
 EOF
@@ -336,7 +335,8 @@ configure_firewall() {
 create_startup_script() {
     print_header "Creating Startup Scripts"
     
-    APP_DIR="$HOME/ragnarok-db-backend"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    APP_DIR="$SCRIPT_DIR"
     
     # Start script
     cat > "$APP_DIR/start.sh" <<'EOF'
@@ -370,28 +370,23 @@ EOF
 print_final_instructions() {
     print_header "Installation Complete!"
     
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
     echo -e "${GREEN}The Ragnarok Database API has been installed successfully!${NC}\n"
     
-    echo -e "${BLUE}Application Directory:${NC} $HOME/ragnarok-db-backend\n"
+    echo -e "${BLUE}Application Directory:${NC} $SCRIPT_DIR\n"
     
     echo -e "${BLUE}To start the API manually:${NC}"
-    echo -e "  cd ~/ragnarok-db-backend"
+    echo -e "  cd $SCRIPT_DIR"
     echo -e "  ./start.sh"
     echo -e ""
     
     echo -e "${BLUE}To use systemd service:${NC}"
-    echo -e "  sudo systemctl start ragnarok-db-api     # Start service (auto git pull)"
+    echo -e "  sudo systemctl start ragnarok-db-api     # Start service"
     echo -e "  sudo systemctl stop ragnarok-db-api      # Stop service"
-    echo -e "  sudo systemctl restart ragnarok-db-api   # Restart service (auto git pull)"
+    echo -e "  sudo systemctl restart ragnarok-db-api   # Restart service"
     echo -e "  sudo systemctl enable ragnarok-db-api    # Enable on boot"
     echo -e "  sudo systemctl status ragnarok-db-api    # Check status"
-    echo -e ""
-    
-    echo -e "${GREEN}Auto-Update Feature:${NC}"
-    echo -e "  Every time you start/restart the service, it will:"
-    echo -e "  1. Pull latest changes from GitHub"
-    echo -e "  2. Update Python dependencies if requirements.txt changed"
-    echo -e "  3. Start the application with the latest code"
     echo -e ""
     
     echo -e "${BLUE}Access the API:${NC}"
@@ -407,8 +402,9 @@ print_final_instructions() {
     echo -e "${YELLOW}Next Steps:${NC}"
     echo -e "  1. Review and edit configuration if needed"
     echo -e "  2. Make sure your data files are in place (data/pre-re/)"
-    echo -e "  3. Start the service: sudo systemctl start ragnarok-db-api"
-    echo -e "  4. Enable on boot: sudo systemctl enable ragnarok-db-api"
+    echo -e "  3. Reload systemd: sudo systemctl daemon-reload"
+    echo -e "  4. Start the service: sudo systemctl start ragnarok-db-api"
+    echo -e "  5. Enable on boot: sudo systemctl enable ragnarok-db-api"
     echo -e ""
     
     print_success "Installation script completed!"
@@ -426,11 +422,13 @@ main() {
     echo "  - Update system packages"
     echo "  - Install Python 3 and dependencies"
     echo "  - Install nginx and supervisor"
-    echo "  - Clone repository from GitHub"
-    echo "  - Create virtual environment"
+    echo "  - Verify repository and update to latest"
+    echo "  - Create virtual environment in current directory"
     echo "  - Install Python packages"
     echo "  - Create systemd service with auto-update"
     echo "  - Configure startup scripts"
+    echo ""
+    echo -e "${YELLOW}Note:${NC} This script must be run from the cloned git repository"
     echo ""
     read -p "Continue with installation? (y/N): " -r
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
