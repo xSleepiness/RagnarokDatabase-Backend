@@ -1,11 +1,13 @@
 """Item API routes"""
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, HTTPException, Query, Path, File, UploadFile
 from fastapi.responses import FileResponse
 from api.models.item import Item
 from core.data_loader import DataLoader
 from core.popularity_tracker import PopularityTracker
 from core.config import settings
+import shutil
+from pathlib import Path as PathlibPath
 
 router = APIRouter()
 data_loader = DataLoader()
@@ -164,6 +166,116 @@ async def get_collection_image(
     raise HTTPException(status_code=404, detail="Image not found and fallback image is missing")
 
 
+@router.put("/items/{item_id}/images/item")
+async def update_item_image(
+    item_id: int = Path(..., ge=1, description="Item ID (positive integer only)"),
+    file: UploadFile = File(..., description="PNG image file")
+):
+    """
+    Update the item image for a specific item.
+    Accepts PNG images only.
+    """
+    # Verify item exists
+    item = data_loader.get_item_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Item with ID {item_id} not found")
+    
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith("image/png"):
+        raise HTTPException(
+            status_code=400, 
+            detail="Only PNG images are allowed. Please upload a .png file."
+        )
+    
+    # Validate filename extension
+    if not file.filename or not file.filename.lower().endswith(".png"):
+        raise HTTPException(
+            status_code=400, 
+            detail="File must have a .png extension"
+        )
+    
+    try:
+        # Create the target path
+        image_path = settings.IMAGES_DIR / "item" / f"{item_id}.png"
+        
+        # Ensure directory exists
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save the uploaded file
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        return {
+            "message": "Item image updated successfully",
+            "item_id": item_id,
+            "item_name": item.name,
+            "image_path": f"/api/v1/items/images/item/{item_id}.png"
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to save image: {str(e)}"
+        )
+    finally:
+        file.file.close()
+
+
+@router.put("/items/{item_id}/images/collection")
+async def update_collection_image(
+    item_id: int = Path(..., ge=1, description="Item ID (positive integer only)"),
+    file: UploadFile = File(..., description="PNG image file")
+):
+    """
+    Update the collection image for a specific item.
+    Accepts PNG images only.
+    """
+    # Verify item exists
+    item = data_loader.get_item_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Item with ID {item_id} not found")
+    
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith("image/png"):
+        raise HTTPException(
+            status_code=400, 
+            detail="Only PNG images are allowed. Please upload a .png file."
+        )
+    
+    # Validate filename extension
+    if not file.filename or not file.filename.lower().endswith(".png"):
+        raise HTTPException(
+            status_code=400, 
+            detail="File must have a .png extension"
+        )
+    
+    try:
+        # Create the target path
+        image_path = settings.IMAGES_DIR / "collection" / f"{item_id}.png"
+        
+        # Ensure directory exists
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save the uploaded file
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        return {
+            "message": "Collection image updated successfully",
+            "item_id": item_id,
+            "item_name": item.name,
+            "image_path": f"/api/v1/items/images/collection/{item_id}.png"
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to save image: {str(e)}"
+        )
+    finally:
+        file.file.close()
+
+
 @router.get("/items/{item_id}/stats")
 async def get_item_stats(item_id: int):
     """Get view statistics for a specific item across all time periods"""
@@ -191,61 +303,3 @@ async def get_item_by_id(item_id: int):
     popularity_tracker.track_view(item_id)
     
     return item
-
-
-@router.get("/items/images/item/{item_id}")
-@router.get("/items/images/item/{item_id}.png")
-async def get_item_image(
-    item_id: int = Path(..., ge=1, description="Item ID (positive integer only)")
-):
-    """Get item image by ID. Returns [not_found].png if image doesn't exist."""
-    image_path = settings.IMAGES_DIR / "item" / f"{item_id}.png"
-    not_found_path = settings.IMAGES_DIR / "item" / "[not_found].png"
-    
-    # Check if specific image exists
-    if image_path.exists():
-        return FileResponse(
-            path=str(image_path),
-            media_type="image/png",
-            headers={"Cache-Control": "public, max-age=86400"}  # Cache for 24 hours
-        )
-    
-    # Return not found image if it exists
-    if not_found_path.exists():
-        return FileResponse(
-            path=str(not_found_path),
-            media_type="image/png",
-            headers={"Cache-Control": "public, max-age=3600"}  # Cache for 1 hour
-        )
-    
-    # If even not_found image doesn't exist, return 404
-    raise HTTPException(status_code=404, detail="Image not found and fallback image is missing")
-
-
-@router.get("/items/images/collection/{item_id}")
-@router.get("/items/images/collection/{item_id}.png")
-async def get_collection_image(
-    item_id: int = Path(..., ge=1, description="Item ID (positive integer only)")
-):
-    """Get collection image by ID. Returns [not_found].png if image doesn't exist."""
-    image_path = settings.IMAGES_DIR / "collection" / f"{item_id}.png"
-    not_found_path = settings.IMAGES_DIR / "collection" / "[not_found].png"
-    
-    # Check if specific image exists
-    if image_path.exists():
-        return FileResponse(
-            path=str(image_path),
-            media_type="image/png",
-            headers={"Cache-Control": "public, max-age=86400"}  # Cache for 24 hours
-        )
-    
-    # Return not found image if it exists
-    if not_found_path.exists():
-        return FileResponse(
-            path=str(not_found_path),
-            media_type="image/png",
-            headers={"Cache-Control": "public, max-age=3600"}  # Cache for 1 hour
-        )
-    
-    # If even not_found image doesn't exist, return 404
-    raise HTTPException(status_code=404, detail="Image not found and fallback image is missing")
