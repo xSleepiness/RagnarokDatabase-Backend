@@ -23,6 +23,32 @@ async def get_items_count():
     }
 
 
+@router.get("/items/types")
+async def get_item_types():
+    """Get all unique item types with their counts"""
+    items = data_loader.get_items()
+    
+    # Count items by type
+    type_counts = {}
+    for item in items:
+        item_type = item.type
+        type_counts[item_type] = type_counts.get(item_type, 0) + 1
+    
+    # Sort by count (descending) and then by name
+    sorted_types = sorted(type_counts.items(), key=lambda x: (-x[1], x[0]))
+    
+    return {
+        "total_types": len(type_counts),
+        "types": [
+            {
+                "type": type_name,
+                "count": count
+            }
+            for type_name, count in sorted_types
+        ]
+    }
+
+
 @router.get("/items", response_model=List[Item])
 async def get_all_items(
     skip: int = Query(0, ge=0, description="Number of items to skip"),
