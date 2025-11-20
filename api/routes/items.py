@@ -100,13 +100,15 @@ async def search_items_by_name(
 
 @router.get("/items/filter/by-type", response_model=List[Item])
 async def filter_items_by_type(
-    item_type: str = Query(..., description="Item type to filter by")
+    item_type: str = Query(..., description="Item type to filter by"),
+    skip: int = Query(0, ge=0, description="Number of items to skip"),
+    limit: int = Query(50, ge=1, le=500, description="Number of items to return")
 ):
-    """Filter items by type"""
+    """Filter items by type with pagination"""
     items = data_loader.filter_items_by_type(item_type)
     if not items:
         raise HTTPException(status_code=404, detail=f"No items found of type '{item_type}'")
-    return items
+    return items[skip:skip + limit]
 
 
 @router.get("/items/popular/{period}")
