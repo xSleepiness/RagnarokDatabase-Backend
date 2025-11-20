@@ -14,6 +14,15 @@ data_loader = DataLoader()
 popularity_tracker = PopularityTracker()
 
 
+@router.get("/items/count")
+async def get_items_count():
+    """Get the total count of items in the database"""
+    items = data_loader.get_items()
+    return {
+        "total_items": len(items)
+    }
+
+
 @router.get("/items", response_model=List[Item])
 async def get_all_items(
     skip: int = Query(0, ge=0, description="Number of items to skip"),
